@@ -1,0 +1,50 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install metadata validator dependencies
+        run: python -m pip install pyyaml
+
+      - name: Validate action metadata
+        shell: bash
+        run: |
+          python - <<'PY'
+          import pathlib
+          import sys
+
+          try:
+              import yaml
+          except Exception as exc:
+              print(f"PyYAML unavailable: {exc}", file=sys.stderr)
+              sys.exit(1)
+
+          action = yaml.safe_load(pathlib.Path("action.yml").read_text())
+          required = ["name", "description", "inputs", "runs"]
+          missing = [key for key in required if key not in action]
+          if missing:
+              raise SystemExit(f"missing required action metadata keys: {missing}")
+          if action["runs"].get("using") != "composite":
+              raise SystemExit("action must be a composite action")
+          PY
+
+      - name: Validate local action loads
+        uses: ./
+        with:
+          api-token: fake-token
+          cli-version: v0.0.0-nonexistent
+          working-directory: .
+        continue-on-error: true

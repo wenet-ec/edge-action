@@ -1,87 +1,89 @@
-name: 'Edge Action'
-description: 'GitHub Actions plugin for Edge Platform package management and deployment'
-author: 'WENet'
+name: "WENet Deploy"
+description: "Deploy the checked-out project with the wenet CLI"
+author: "WENet"
 
 inputs:
-  api_token:
-    description: 'Bearer token for API authentication'
+  api-token:
+    description: "WENet public API token"
     required: true
-  workflow:
-    description: 'Comma-separated workflow steps (e.g., "upload", "deploy", "upload,deploy")'
-    required: true
-  base_url:
-    description: 'Platform base URL'
+  api-server:
+    description: "WENet public API server"
     required: false
-    default: 'https://wenet.cloud'
-  sun_url:
-    description: 'Sun Service URL'
+    default: "https://api.wenet-ec.com"
+  cli-version:
+    description: "wenet CLI version to install, e.g. v0.1.0. Use latest for the newest release."
     required: false
-    default: 'https://sun.wenet.cloud'
-  
-  # Package-related inputs
-  package_path:
-    description: 'Path to the directory/files to package'
+    default: "latest"
+  cli-repository:
+    description: "GitHub repository that publishes wenet CLI releases"
     required: false
-  package_name:
-    description: 'Name for the package'
+    default: "wenet-ec/wenet-cli"
+  working-directory:
+    description: "Directory containing edge.toml"
     required: false
-  package_tag:
-    description: 'Version tag for the package'
-    required: false
-  
-  # Deployment-related inputs
-  node_ids:
-    description: 'Comma-separated string or array of node UUIDs to deploy to'
-    required: false
-  
-  # Registry-related inputs (future feature)
-  registry_url:
-    description: 'Container registry URL (future feature)'
-    required: false
-  registry_username:
-    description: 'Registry authentication username (future feature)'
-    required: false
-  registry_password:
-    description: 'Registry authentication password (future feature)'
-    required: false
-  
-  # Optional packaging inputs
-  include_patterns:
-    description: 'Comma-separated glob patterns for files to include'
-    required: false
-  exclude_patterns:
-    description: 'Comma-separated glob patterns for files to exclude'
-    required: false
-
-outputs:
-  # Upload outputs
-  upload_package_id:
-    description: 'ID of the uploaded package'
-  upload_package_url:
-    description: 'URL of the uploaded package file'
-  upload_status:
-    description: 'Upload success/failure status'
-  upload_was_updated:
-    description: 'Boolean indicating if existing package was updated (true) or new package was created (false)'
-  
-  # Deployment outputs
-  deploy_deployment_ids:
-    description: 'JSON array of created deployment IDs'
-  deploy_deployment_summary:
-    description: 'JSON object with deployment results per node'
-  deploy_status:
-    description: 'Overall deployment status'
-  
-  # Push outputs (future feature)
-  push_registry_url:
-    description: 'Registry URL where package was pushed'
-  push_status:
-    description: 'Push success/failure status'
+    default: "."
 
 runs:
-  using: 'docker'
-  image: 'Dockerfile'
+  using: "composite"
+  steps:
+    - name: Install wenet CLI
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = "Stop"
+
+        $repo = "${{ inputs.cli-repository }}"
+        $version = "${{ inputs.cli-version }}"
+        $runnerOs = "${{ runner.os }}"
+        $runnerArch = "${{ runner.arch }}"
+
+        $os = switch ($runnerOs) {
+          "Linux" { "linux" }
+          "macOS" { "darwin" }
+          "Windows" { "windows" }
+          default { throw "unsupported runner OS: $runnerOs" }
+        }
+
+        $arch = switch ($runnerArch) {
+          "X64" { "amd64" }
+          "ARM64" { "arm64" }
+          default { throw "unsupported runner architecture: $runnerArch" }
+        }
+
+        $extension = if ($os -eq "windows") { "zip" } else { "tar.gz" }
+        $asset = "wenet_${os}_${arch}.${extension}"
+
+        if ($version -eq "latest") {
+          $url = "https://github.com/${repo}/releases/latest/download/${asset}"
+        } else {
+          $url = "https://github.com/${repo}/releases/download/${version}/${asset}"
+        }
+
+        $installDir = Join-Path $env:RUNNER_TEMP "wenet-cli"
+        $archivePath = Join-Path $env:RUNNER_TEMP $asset
+        New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+
+        Write-Host "Downloading wenet CLI ${version} for ${os}/${arch}"
+        Invoke-WebRequest -Uri $url -OutFile $archivePath
+
+        if ($os -eq "windows") {
+          Expand-Archive -Path $archivePath -DestinationPath $installDir -Force
+        } else {
+          tar -xzf $archivePath -C $installDir
+          chmod +x (Join-Path $installDir "wenet")
+        }
+
+        Add-Content -Path $env:GITHUB_PATH -Value $installDir
+
+    - name: Deploy with wenet
+      shell: pwsh
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        API_TOKEN: ${{ inputs.api-token }}
+        API_SERVER: ${{ inputs.api-server }}
+      run: |
+        $ErrorActionPreference = "Stop"
+        wenet deploy
 
 branding:
-  icon: 'cloud'
-  color: 'blue'
+  icon: "upload-cloud"
+  color: "blue"
