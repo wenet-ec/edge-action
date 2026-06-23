@@ -9,6 +9,8 @@ This action is intentionally thin:
 3. Run `wenet deploy` in the directory containing `edge.toml`.
 
 All packaging and deployment behavior lives in the CLI, not in this action.
+Packaging uses `.edgeignore` only. `.gitignore` does not affect WENet deployment
+archives.
 
 ## Usage
 
