@@ -72,13 +72,12 @@ The project being deployed must include `edge.toml`:
 ```toml
 project = "my-web-server"
 tag = "1.2.0"
+all = true
 
 [scripts]
 linux = "deploy.sh"
 darwin = "deploy.sh"
 windows = "deploy.ps1"
-
-all = true
 ```
 
 See the `wenet-cli` repository for the full config format.

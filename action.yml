@@ -10,6 +10,10 @@ inputs:
     description: "WENet public API server"
     required: false
     default: "https://api.wenet-ec.com"
+  command:
+    description: "wenet command to run: deploy (build + upload + rollout) or push (build + upload only)"
+    required: false
+    default: "deploy"
   cli-version:
     description: "wenet CLI version to install, e.g. v0.1.0. Use latest for the newest release."
     required: false
@@ -74,7 +78,7 @@ runs:
 
         Add-Content -Path $env:GITHUB_PATH -Value $installDir
 
-    - name: Deploy with wenet
+    - name: Run wenet
       shell: pwsh
       working-directory: ${{ inputs.working-directory }}
       env:
@@ -82,7 +86,11 @@ runs:
         API_SERVER: ${{ inputs.api-server }}
       run: |
         $ErrorActionPreference = "Stop"
-        wenet deploy
+        $cmd = "${{ inputs.command }}"
+        if ($cmd -ne "deploy" -and $cmd -ne "push") {
+          throw "Invalid command '$cmd'. Must be 'deploy' or 'push'."
+        }
+        wenet $cmd
 
 branding:
   icon: "upload-cloud"
